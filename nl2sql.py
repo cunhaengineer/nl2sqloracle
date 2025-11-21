@@ -114,12 +114,34 @@ def call_openai(prompt: str) -> str:
 
 def call_llm(prompt: str) -> str:
     provider = get_llm_provider()
+    try:
+        if provider == "ollama":
+            return call_ollama(prompt)
+        if provider == "openai":
+            return call_openai(prompt)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Falha ao chamar provider {provider}: {exc}") from exc
+
+    raise RuntimeError(f"NL2SQL_PROVIDER não suportado: {provider}")
+
+
+def validate_provider_configuration() -> None:
+    """Valida configurações mínimas do provedor escolhido."""
+    provider = get_llm_provider()
+
     if provider == "ollama":
-        return call_ollama(prompt)
-    elif provider == "openai":
-        return call_openai(prompt)
-    else:
-        raise RuntimeError(f"NL2SQL_PROVIDER não suportado: {provider}")
+        if not os.getenv("OLLAMA_MODEL", "").strip():
+            raise RuntimeError("OLLAMA_MODEL não definido para o provedor Ollama.")
+        return
+
+    if provider == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            raise RuntimeError("OPENAI_API_KEY não definido para o provedor OpenAI.")
+        if not os.getenv("OPENAI_MODEL", "").strip():
+            raise RuntimeError("OPENAI_MODEL não definido para o provedor OpenAI.")
+        return
+
+    raise RuntimeError(f"NL2SQL_PROVIDER não suportado: {provider}")
 
 
 # ==========================
@@ -799,6 +821,11 @@ FROM (
 def main():
     print("=== NL2SQL Oracle (SELECT / WITH) - Negócio + Infra ===")
     print("Conectando no banco...")
+    try:
+        validate_provider_configuration()
+    except RuntimeError as e:  # noqa: BLE001
+        print(f"[ERRO] Configuração inválida: {e}")
+        sys.exit(1)
 
     conn = get_connection()
 
@@ -853,4 +880,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```0
